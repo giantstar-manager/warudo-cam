@@ -18,26 +18,42 @@
       <select id="cameraSelect" class="mt-8"></select>
     </div>
 
+    <div class="mb-16">
+      <label for="codecSelect">코덱 선택</label>
+      <select id="codecSelect" class="mt-8">
+        <option value="vp9" selected>VP9 (권장)</option>
+        <option value="h264">H.264</option>
+      </select>
+    </div>
+
     <video id="preview" class="push-preview mt-8 mb-16" autoplay muted playsinline></video>
 
     <!-- Step 2: Generate Offer Code -->
-    <button id="createOffer" class="btn btn-primary mb-16">연결 코드 생성</button>
+    <button id="createOffer" class="btn btn-primary mb-16" type="button">연결 코드 생성</button>
 
     <div id="offerSection" class="mb-16" style="display:none">
       <label for="offerCode">연결 코드 (상대방에게 전달하세요)</label>
       <textarea id="offerCode" class="mt-8" rows="4" readonly></textarea>
-      <button id="copyOffer" class="btn btn-success mt-8">복사</button>
+      <button id="copyOffer" class="btn btn-success mt-8" type="button">복사</button>
     </div>
 
     <!-- Step 3: Paste Answer Code -->
     <div id="answerSection" class="mb-16" style="display:none">
       <label for="answerInput">상대방 응답 코드 붙여넣기</label>
       <textarea id="answerInput" class="mt-8" rows="4" placeholder="상대방이 보낸 응답 코드를 여기에 붙여넣으세요"></textarea>
-      <button id="applyAnswer" class="btn btn-primary mt-8">연결</button>
+      <button id="applyAnswer" class="btn btn-primary mt-8" type="button">연결</button>
     </div>
 
     <!-- Status display -->
     <div id="status" class="status-indicator status-waiting mt-16">대기 중</div>
+    <div id="statsPanel" class="stats-panel stats-inline mt-8" aria-live="polite">
+      <div class="stats-item"><span>비트레이트</span><strong id="statBitrate" class="stats-value">-</strong></div>
+      <div class="stats-item"><span>해상도</span><strong id="statResolution" class="stats-value">-</strong></div>
+      <div class="stats-item"><span>프레임</span><strong id="statFps" class="stats-value">-</strong></div>
+      <div class="stats-item"><span>패킷 손실</span><strong id="statPacketLoss" class="stats-value">-</strong></div>
+      <div class="stats-item"><span>코덱</span><strong id="statCodec" class="stats-value">-</strong></div>
+      <div class="stats-item"><span>지연</span><strong id="statRtt" class="stats-value">-</strong></div>
+    </div>
   </div>
 
   <script src="lz-string.min.js"></script>
@@ -45,6 +61,7 @@
   <script>
     (function () {
       var cameraSelect = document.getElementById('cameraSelect');
+      var codecSelect = document.getElementById('codecSelect');
       var preview = document.getElementById('preview');
       var createOfferBtn = document.getElementById('createOffer');
       var offerSection = document.getElementById('offerSection');
@@ -54,17 +71,82 @@
       var answerInput = document.getElementById('answerInput');
       var applyAnswerBtn = document.getElementById('applyAnswer');
       var statusEl = document.getElementById('status');
+      var statsPanel = document.getElementById('statsPanel');
+      var statBitrate = document.getElementById('statBitrate');
+      var statResolution = document.getElementById('statResolution');
+      var statFps = document.getElementById('statFps');
+      var statPacketLoss = document.getElementById('statPacketLoss');
+      var statCodec = document.getElementById('statCodec');
+      var statRtt = document.getElementById('statRtt');
 
       var currentStream = null;
+      var reconnectAttempt = 0;
+
+      function updateStatus(cls, text) {
+        statusEl.className = 'status-indicator ' + cls + ' mt-16';
+        statusEl.textContent = text;
+      }
+
+      function toMbps(value) {
+        if (!value || value < 0) return '0.00 Mbps';
+        return (value / 1000000).toFixed(2) + ' Mbps';
+      }
+
+      function setQualityClass(el, metric, value) {
+        var quality = 'stats-warn';
+        if (metric === 'bitrate') {
+          quality = value > 8 ? 'stats-good' : (value >= 4 ? 'stats-warn' : 'stats-bad');
+        } else if (metric === 'packetLoss') {
+          quality = value < 1 ? 'stats-good' : (value <= 5 ? 'stats-warn' : 'stats-bad');
+        } else if (metric === 'fps') {
+          quality = value >= 28 ? 'stats-good' : (value >= 20 ? 'stats-warn' : 'stats-bad');
+        }
+        el.className = 'stats-value ' + quality;
+      }
+
+      function renderStats(stats) {
+        var bitrateMbps = (stats.bitrate || 0) / 1000000;
+        var fps = stats.fps || 0;
+        var packetLoss = stats.packetLoss || 0;
+        var resolutionText = '-';
+        if (stats.resolution && stats.resolution.w && stats.resolution.h) {
+          resolutionText = stats.resolution.w + 'x' + stats.resolution.h;
+        }
+
+        statBitrate.textContent = toMbps(stats.bitrate || 0);
+        statResolution.textContent = resolutionText;
+        statFps.textContent = fps.toFixed(1) + ' fps';
+        statPacketLoss.textContent = packetLoss.toFixed(2) + '%';
+        statCodec.textContent = (stats.codec || RTC.getConfig().codec || '-').toUpperCase();
+        statRtt.textContent = ((stats.roundTripTime || 0).toFixed(0)) + ' ms';
+
+        setQualityClass(statBitrate, 'bitrate', bitrateMbps);
+        setQualityClass(statFps, 'fps', fps);
+        setQualityClass(statPacketLoss, 'packetLoss', packetLoss);
+      }
+
+      RTC.onStats(function (stats) {
+        renderStats(stats);
+      });
+
+      RTC.onReconnect(function () {
+        reconnectAttempt += 1;
+        updateStatus('status-connecting', '재연결 시도 중... (' + reconnectAttempt + '/3)');
+      });
+
+      RTC.onReconnectFailed(function () {
+        updateStatus('status-disconnected', '재연결 실패');
+      });
 
       // --- Camera listing & preview ---
 
       function populateCameras() {
         RTC.listCameras().then(function (cameras) {
+          var opt;
           cameraSelect.innerHTML = '';
 
           if (!cameras || cameras.length === 0) {
-            var opt = document.createElement('option');
+            opt = document.createElement('option');
             opt.textContent = '카메라를 찾을 수 없습니다';
             opt.disabled = true;
             cameraSelect.appendChild(opt);
@@ -100,6 +182,12 @@
       cameraSelect.addEventListener('change', function () {
         startPreview(cameraSelect.value);
       });
+
+      codecSelect.addEventListener('change', function () {
+        RTC.configure({ codec: codecSelect.value });
+      });
+
+      RTC.configure({ codec: codecSelect.value });
 
       // --- Offer creation ---
 
@@ -164,8 +252,16 @@
         var info = stateMap[state];
         if (!info) return;
 
-        statusEl.className = 'status-indicator ' + info.cls + ' mt-16';
-        statusEl.textContent = info.text;
+        updateStatus(info.cls, info.text);
+
+        if (state === 'connected') {
+          reconnectAttempt = 0;
+          statsPanel.classList.add('stats-visible');
+          RTC.startStats(2000);
+        } else if (state === 'disconnected' || state === 'failed' || state === 'closed') {
+          RTC.stopStats();
+          statsPanel.classList.remove('stats-visible');
+        }
       });
 
       // --- Init ---

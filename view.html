@@ -12,15 +12,21 @@
     <h1>📺 Warudo Cam — 영상 받기</h1>
     <p class="text-muted">상대방이 보낸 연결 코드를 붙여넣고 연결하세요</p>
 
-    <label>상대방 연결 코드 붙여넣기</label>
+    <label for="codecSelect">코덱 선택</label>
+    <select id="codecSelect" class="mt-8 mb-16">
+      <option value="vp9" selected>VP9 (권장)</option>
+      <option value="h264">H.264</option>
+    </select>
+
+    <label for="offerInput">상대방 연결 코드 붙여넣기</label>
     <textarea id="offerInput" rows="4" placeholder="상대방이 보낸 연결 코드를 여기에 붙여넣으세요"></textarea>
-    <button id="connect" class="btn btn-primary mt-8">연결</button>
+    <button id="connect" class="btn btn-primary mt-8" type="button">연결</button>
 
     <div id="answerSection" style="display:none">
       <label>응답 코드 (상대방에게 전달하세요)</label>
       <textarea id="answerCode" rows="4" readonly></textarea>
       <div class="gap-8 mt-8">
-        <button id="copyAnswer" class="btn btn-success">복사</button>
+        <button id="copyAnswer" class="btn btn-success" type="button">복사</button>
       </div>
     </div>
 
@@ -28,19 +34,199 @@
   </div>
 
   <!-- Video (always present, fills screen when connected) -->
-  <video id="remoteVideo" class="view-video" autoplay playsinline></video>
+  <video id="remoteVideo" class="view-video" autoplay playsinline>
+    <track kind="captions" srclang="ko" label="자막" src="data:text/vtt,WEBVTT">
+  </video>
+
+  <div id="statsPanel" class="stats-panel" aria-live="polite">
+    <div class="stats-item"><span>비트레이트</span><strong id="statBitrate" class="stats-value">-</strong></div>
+    <div class="stats-item"><span>해상도</span><strong id="statResolution" class="stats-value">-</strong></div>
+    <div class="stats-item"><span>프레임</span><strong id="statFps" class="stats-value">-</strong></div>
+    <div class="stats-item"><span>패킷 손실</span><strong id="statPacketLoss" class="stats-value">-</strong></div>
+    <div class="stats-item"><span>코덱</span><strong id="statCodec" class="stats-value">-</strong></div>
+    <div class="stats-item"><span>지연</span><strong id="statRtt" class="stats-value">-</strong></div>
+  </div>
+
+  <div id="enhancePanel" class="enhance-panel">
+    <button id="enhanceToggle" class="enhance-gear" type="button" aria-expanded="false" aria-controls="enhanceContent">⚙</button>
+    <div id="enhanceContent" class="enhance-content">
+      <div class="enhance-row enhance-row-toggle">
+        <label for="enhanceEnable">화질 향상</label>
+        <input id="enhanceEnable" type="checkbox" checked>
+      </div>
+      <div class="enhance-row">
+        <label for="sharpnessRange">선명도</label>
+        <input id="sharpnessRange" type="range" min="0" max="100" value="30">
+        <span id="sharpnessValue" class="enhance-value">30%</span>
+      </div>
+      <div class="enhance-row">
+        <label for="contrastRange">대비</label>
+        <input id="contrastRange" type="range" min="0.8" max="1.4" step="0.01" value="1.05">
+        <span id="contrastValue" class="enhance-value">1.05</span>
+      </div>
+      <div class="enhance-row">
+        <label for="saturationRange">채도</label>
+        <input id="saturationRange" type="range" min="0.8" max="1.4" step="0.01" value="1.10">
+        <span id="saturationValue" class="enhance-value">1.10</span>
+      </div>
+      <button id="enhanceReset" class="btn mt-8" type="button">초기화</button>
+    </div>
+  </div>
+
+  <svg class="svg-filter-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <filter id="warudoSharpen" x="-10%" y="-10%" width="120%" height="120%">
+      <feConvolveMatrix id="sharpenMatrix" order="3" kernelMatrix="0 0 0 0 1 0 0 0 0" preserveAlpha="true" edgeMode="duplicate"></feConvolveMatrix>
+    </filter>
+  </svg>
 
   <script src="lz-string.min.js"></script>
   <script src="rtc.js"></script>
   <script>
     (function () {
       var offerInput = document.getElementById('offerInput');
+      var codecSelect = document.getElementById('codecSelect');
       var connectBtn = document.getElementById('connect');
       var answerSection = document.getElementById('answerSection');
       var answerCodeEl = document.getElementById('answerCode');
       var copyAnswerBtn = document.getElementById('copyAnswer');
       var remoteVideo = document.getElementById('remoteVideo');
       var statusEl = document.getElementById('status');
+      var statsPanel = document.getElementById('statsPanel');
+      var statBitrate = document.getElementById('statBitrate');
+      var statResolution = document.getElementById('statResolution');
+      var statFps = document.getElementById('statFps');
+      var statPacketLoss = document.getElementById('statPacketLoss');
+      var statCodec = document.getElementById('statCodec');
+      var statRtt = document.getElementById('statRtt');
+      var enhancePanel = document.getElementById('enhancePanel');
+      var enhanceToggle = document.getElementById('enhanceToggle');
+      var enhanceContent = document.getElementById('enhanceContent');
+      var enhanceEnable = document.getElementById('enhanceEnable');
+      var sharpnessRange = document.getElementById('sharpnessRange');
+      var contrastRange = document.getElementById('contrastRange');
+      var saturationRange = document.getElementById('saturationRange');
+      var sharpnessValue = document.getElementById('sharpnessValue');
+      var contrastValue = document.getElementById('contrastValue');
+      var saturationValue = document.getElementById('saturationValue');
+      var enhanceReset = document.getElementById('enhanceReset');
+      var sharpenMatrix = document.getElementById('sharpenMatrix');
+
+      var reconnectAttempt = 0;
+      var statsForcedVisible = false;
+
+      function updateStatus(cls, text) {
+        statusEl.className = 'status-indicator ' + cls + ' mt-16';
+        statusEl.textContent = text;
+      }
+
+      function setQualityClass(el, metric, value) {
+        var quality = 'stats-warn';
+        if (metric === 'bitrate') {
+          quality = value > 8 ? 'stats-good' : (value >= 4 ? 'stats-warn' : 'stats-bad');
+        } else if (metric === 'packetLoss') {
+          quality = value < 1 ? 'stats-good' : (value <= 5 ? 'stats-warn' : 'stats-bad');
+        } else if (metric === 'fps') {
+          quality = value >= 28 ? 'stats-good' : (value >= 20 ? 'stats-warn' : 'stats-bad');
+        }
+        el.className = 'stats-value ' + quality;
+      }
+
+      function renderStats(stats) {
+        var bitrateMbps = (stats.bitrate || 0) / 1000000;
+        var fps = stats.fps || 0;
+        var packetLoss = stats.packetLoss || 0;
+        var resolutionText = '-';
+        if (stats.resolution && stats.resolution.w && stats.resolution.h) {
+          resolutionText = stats.resolution.w + 'x' + stats.resolution.h;
+        }
+
+        statBitrate.textContent = bitrateMbps.toFixed(2) + ' Mbps';
+        statResolution.textContent = resolutionText;
+        statFps.textContent = fps.toFixed(1) + ' fps';
+        statPacketLoss.textContent = packetLoss.toFixed(2) + '%';
+        statCodec.textContent = (stats.codec || RTC.getConfig().codec || '-').toUpperCase();
+        statRtt.textContent = (stats.roundTripTime || 0).toFixed(0) + ' ms';
+
+        setQualityClass(statBitrate, 'bitrate', bitrateMbps);
+        setQualityClass(statFps, 'fps', fps);
+        setQualityClass(statPacketLoss, 'packetLoss', packetLoss);
+      }
+
+      function updateSharpenKernel() {
+        var amount = Number(sharpnessRange.value) / 100;
+        var diag = -(amount * 0.5);
+        var card = -amount;
+        var center = 1 + (6 * amount);
+        var kernel = [
+          diag, card, diag,
+          card, center, card,
+          diag, card, diag
+        ].map(function (n) { return n.toFixed(3); }).join(' ');
+        sharpenMatrix.setAttribute('kernelMatrix', kernel);
+      }
+
+      function applyEnhancement() {
+        sharpnessValue.textContent = sharpnessRange.value + '%';
+        contrastValue.textContent = Number(contrastRange.value).toFixed(2);
+        saturationValue.textContent = Number(saturationRange.value).toFixed(2);
+
+        if (!enhanceEnable.checked) {
+          remoteVideo.style.filter = 'none';
+          return;
+        }
+
+        updateSharpenKernel();
+        remoteVideo.style.filter = 'url(#warudoSharpen) contrast(' + Number(contrastRange.value).toFixed(2) + ') saturate(' + Number(saturationRange.value).toFixed(2) + ')';
+      }
+
+      function toggleEnhancePanel(forceOpen) {
+        var isOpen = typeof forceOpen === 'boolean' ? forceOpen : !enhancePanel.classList.contains('open');
+        enhancePanel.classList.toggle('open', isOpen);
+        enhanceToggle.setAttribute('aria-expanded', String(isOpen));
+        enhanceContent.hidden = !isOpen;
+      }
+
+      RTC.configure({ codec: codecSelect.value });
+
+      codecSelect.addEventListener('change', function () {
+        RTC.configure({ codec: codecSelect.value });
+      });
+
+      enhanceToggle.addEventListener('click', function () {
+        toggleEnhancePanel();
+      });
+
+      [enhanceEnable, sharpnessRange, contrastRange, saturationRange].forEach(function (el) {
+        el.addEventListener('input', applyEnhancement);
+      });
+
+      enhanceReset.addEventListener('click', function () {
+        enhanceEnable.checked = true;
+        sharpnessRange.value = '30';
+        contrastRange.value = '1.05';
+        saturationRange.value = '1.10';
+        applyEnhancement();
+      });
+
+      document.addEventListener('keydown', function (event) {
+        if (event.key && event.key.toLowerCase() === 's') {
+          statsForcedVisible = !statsForcedVisible;
+          document.body.classList.toggle('stats-force-visible', statsForcedVisible);
+        }
+      });
+
+      RTC.onStats(function (stats) {
+        renderStats(stats);
+      });
+
+      RTC.onReconnect(function () {
+        reconnectAttempt += 1;
+        updateStatus('status-connecting', '재연결 시도 중... (' + reconnectAttempt + '/3)');
+      });
+
+      RTC.onReconnectFailed(function () {
+        updateStatus('status-disconnected', '재연결 실패');
+      });
 
       // URL parameter support: auto-fill offer code
       var params = new URLSearchParams(window.location.search);
@@ -52,6 +238,7 @@
       // Remote track handler
       RTC.onRemoteTrack(function (stream) {
         remoteVideo.srcObject = stream;
+        applyEnhancement();
       });
 
       // State change handler
@@ -67,17 +254,24 @@
         var info = map[state];
         if (!info) return;
 
-        statusEl.className = 'status-indicator ' + info.cls + ' mt-16';
-        statusEl.textContent = info.text;
+        updateStatus(info.cls, info.text);
 
         if (state === 'connected') {
+          reconnectAttempt = 0;
           document.body.classList.add('view-connected');
+          statsPanel.classList.add('stats-visible');
+          RTC.startStats(2000);
+        } else if (state === 'disconnected' || state === 'failed' || state === 'closed') {
+          RTC.stopStats();
+          statsPanel.classList.remove('stats-visible');
         }
       });
 
       // Connect button
       connectBtn.addEventListener('click', async function () {
         var code = offerInput.value.trim();
+        var answerSDP;
+        var answerCode;
         if (!code) return;
 
         var offerSDP = LZString.decompressFromBase64(code);
@@ -88,8 +282,8 @@
 
         try {
           RTC.createPeer(false);
-          var answerSDP = await RTC.createAnswer(offerSDP);
-          var answerCode = LZString.compressToBase64(answerSDP);
+          answerSDP = await RTC.createAnswer(offerSDP);
+          answerCode = LZString.compressToBase64(answerSDP);
 
           answerCodeEl.value = answerCode;
           answerSection.style.display = '';
@@ -107,6 +301,9 @@
           copyAnswerBtn.textContent = '복사';
         }, 2000);
       });
+
+      toggleEnhancePanel(false);
+      applyEnhancement();
     })();
   </script>
 </body>
