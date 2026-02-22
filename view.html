@@ -49,33 +49,86 @@
 
   <div id="enhancePanel" class="enhance-panel">
     <button id="enhanceToggle" class="enhance-gear" type="button" aria-expanded="false" aria-controls="enhanceContent">⚙</button>
-    <div id="enhanceContent" class="enhance-content">
-      <div class="enhance-row enhance-row-toggle">
-        <label for="enhanceEnable">화질 향상</label>
-        <input id="enhanceEnable" type="checkbox" checked>
-      </div>
-      <div class="enhance-row">
-        <label for="sharpnessRange">선명도</label>
-        <input id="sharpnessRange" type="range" min="0" max="100" value="30">
-        <span id="sharpnessValue" class="enhance-value">30%</span>
-      </div>
+      <div id="enhanceContent" class="enhance-content">
+        <div class="enhance-row enhance-row-toggle">
+          <label for="enhanceEnable">화질 향상</label>
+          <input id="enhanceEnable" type="checkbox" checked>
+        </div>
+        <div class="enhance-section">화질</div>
+        <div class="enhance-row">
+          <label for="sharpnessRange">선명도</label>
+          <input id="sharpnessRange" type="range" min="0" max="100" value="30">
+          <span id="sharpnessValue" class="enhance-value">30%</span>
+        </div>
       <div class="enhance-row">
         <label for="contrastRange">대비</label>
         <input id="contrastRange" type="range" min="0.8" max="1.4" step="0.01" value="1.05">
         <span id="contrastValue" class="enhance-value">1.05</span>
       </div>
-      <div class="enhance-row">
-        <label for="saturationRange">채도</label>
-        <input id="saturationRange" type="range" min="0.8" max="1.4" step="0.01" value="1.10">
-        <span id="saturationValue" class="enhance-value">1.10</span>
+        <div class="enhance-row">
+          <label for="saturationRange">채도</label>
+          <input id="saturationRange" type="range" min="0.8" max="1.4" step="0.01" value="1.10">
+          <span id="saturationValue" class="enhance-value">1.10</span>
+        </div>
+        <div class="enhance-row">
+          <label for="brightnessRange">밝기</label>
+          <input id="brightnessRange" type="range" min="0.5" max="2.0" step="0.01" value="1.00">
+          <span id="brightnessValue" class="enhance-value">1.00</span>
+        </div>
+        <div class="enhance-row">
+          <label for="gammaRange">감마</label>
+          <input id="gammaRange" type="range" min="0.5" max="2.5" step="0.01" value="1.00">
+          <span id="gammaValue" class="enhance-value">1.00</span>
+        </div>
+        <div class="enhance-section">색상</div>
+        <div class="enhance-row">
+          <label for="tempRange">색온도</label>
+          <input id="tempRange" type="range" min="-100" max="100" step="1" value="0">
+          <span id="tempValue" class="enhance-value">0</span>
+        </div>
+        <div class="enhance-row">
+          <label for="hueRange">색상 회전</label>
+          <input id="hueRange" type="range" min="-180" max="180" step="1" value="0">
+          <span id="hueValue" class="enhance-value">0°</span>
+        </div>
+        <div class="enhance-section">변환</div>
+        <div class="enhance-row">
+          <label for="denoiseRange">노이즈 제거</label>
+          <input id="denoiseRange" type="range" min="0" max="3.0" step="0.1" value="0">
+          <span id="denoiseValue" class="enhance-value">0px</span>
+        </div>
+        <div class="enhance-row enhance-row-check">
+          <label for="flipEnable">좌우 반전</label>
+          <input id="flipEnable" type="checkbox">
+        </div>
+        <div class="enhance-row">
+          <label for="zoomRange">확대/축소</label>
+          <input id="zoomRange" type="range" min="1.0" max="3.0" step="0.01" value="1.00">
+          <span id="zoomValue" class="enhance-value">1.00x</span>
+        </div>
+        <div class="enhance-row">
+          <label for="opacityRange">불투명도</label>
+          <input id="opacityRange" type="range" min="0" max="1.0" step="0.01" value="1.00">
+          <span id="opacityValue" class="enhance-value">1.00</span>
+        </div>
+        <div class="enhance-section">초기화</div>
+        <button id="enhanceReset" class="btn mt-8" type="button">초기화</button>
       </div>
-      <button id="enhanceReset" class="btn mt-8" type="button">초기화</button>
     </div>
-  </div>
 
   <svg class="svg-filter-defs" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <filter id="warudoSharpen" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
       <feConvolveMatrix id="sharpenMatrix" order="3" kernelMatrix="0 0 0 0 1 0 0 0 0" preserveAlpha="true" edgeMode="duplicate"></feConvolveMatrix>
+    </filter>
+    <filter id="warudoGamma" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+      <feComponentTransfer>
+        <feFuncR id="gammaFuncR" type="gamma" amplitude="1" exponent="1" offset="0"></feFuncR>
+        <feFuncG id="gammaFuncG" type="gamma" amplitude="1" exponent="1" offset="0"></feFuncG>
+        <feFuncB id="gammaFuncB" type="gamma" amplitude="1" exponent="1" offset="0"></feFuncB>
+      </feComponentTransfer>
+    </filter>
+    <filter id="warudoTemp" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+      <feColorMatrix id="tempMatrix" type="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0"></feColorMatrix>
     </filter>
   </svg>
 
@@ -105,11 +158,30 @@
       var sharpnessRange = document.getElementById('sharpnessRange');
       var contrastRange = document.getElementById('contrastRange');
       var saturationRange = document.getElementById('saturationRange');
+      var brightnessRange = document.getElementById('brightnessRange');
+      var gammaRange = document.getElementById('gammaRange');
+      var tempRange = document.getElementById('tempRange');
+      var hueRange = document.getElementById('hueRange');
+      var denoiseRange = document.getElementById('denoiseRange');
+      var flipEnable = document.getElementById('flipEnable');
+      var zoomRange = document.getElementById('zoomRange');
+      var opacityRange = document.getElementById('opacityRange');
       var sharpnessValue = document.getElementById('sharpnessValue');
       var contrastValue = document.getElementById('contrastValue');
       var saturationValue = document.getElementById('saturationValue');
+      var brightnessValue = document.getElementById('brightnessValue');
+      var gammaValue = document.getElementById('gammaValue');
+      var tempValue = document.getElementById('tempValue');
+      var hueValue = document.getElementById('hueValue');
+      var denoiseValue = document.getElementById('denoiseValue');
+      var zoomValue = document.getElementById('zoomValue');
+      var opacityValue = document.getElementById('opacityValue');
       var enhanceReset = document.getElementById('enhanceReset');
       var sharpenMatrix = document.getElementById('sharpenMatrix');
+      var gammaFuncR = document.getElementById('gammaFuncR');
+      var gammaFuncG = document.getElementById('gammaFuncG');
+      var gammaFuncB = document.getElementById('gammaFuncB');
+      var tempMatrix = document.getElementById('tempMatrix');
 
       var reconnectAttempt = 0;
       var statsForcedVisible = false;
@@ -165,18 +237,111 @@
         sharpenMatrix.setAttribute('kernelMatrix', kernel);
       }
 
+      function updateGammaExponent() {
+        var exponent = Number(gammaRange.value).toFixed(2);
+        gammaFuncR.setAttribute('exponent', exponent);
+        gammaFuncG.setAttribute('exponent', exponent);
+        gammaFuncB.setAttribute('exponent', exponent);
+      }
+
+      function updateTempMatrixValues() {
+        var tempValueRaw = Number(tempRange.value);
+        var amount = Math.min(Math.abs(tempValueRaw) / 100, 1);
+        var red = tempValueRaw >= 0 ? 1 + amount : 1 - amount;
+        var blue = tempValueRaw >= 0 ? 1 - amount : 1 + amount;
+        red = Math.max(0, Math.min(2, red));
+        blue = Math.max(0, Math.min(2, blue));
+        var matrixValues = [
+          red.toFixed(3), '0', '0', '0', '0',
+          '0', '1.000', '0', '0', '0',
+          '0', '0', blue.toFixed(3), '0', '0',
+          '0', '0', '0', '1', '0'
+        ].join(' ');
+        tempMatrix.setAttribute('values', matrixValues);
+      }
+
       function applyEnhancement() {
+        var sharpness = Number(sharpnessRange.value);
+        var contrast = Number(contrastRange.value);
+        var saturation = Number(saturationRange.value);
+        var brightness = Number(brightnessRange.value);
+        var gamma = Number(gammaRange.value);
+        var temp = Number(tempRange.value);
+        var hue = Number(hueRange.value);
+        var denoise = Number(denoiseRange.value);
+        var zoom = Number(zoomRange.value);
+        var opacity = Number(opacityRange.value);
+
         sharpnessValue.textContent = sharpnessRange.value + '%';
-        contrastValue.textContent = Number(contrastRange.value).toFixed(2);
-        saturationValue.textContent = Number(saturationRange.value).toFixed(2);
+        contrastValue.textContent = contrast.toFixed(2);
+        saturationValue.textContent = saturation.toFixed(2);
+        brightnessValue.textContent = brightness.toFixed(2);
+        gammaValue.textContent = gamma.toFixed(2);
+        tempValue.textContent = String(temp);
+        hueValue.textContent = String(hue) + '°';
+        denoiseValue.textContent = (denoise % 1 === 0 ? denoise.toFixed(0) : denoise.toFixed(1)) + 'px';
+        zoomValue.textContent = zoom.toFixed(2) + 'x';
+        opacityValue.textContent = opacity.toFixed(2);
 
         if (!enhanceEnable.checked) {
           remoteVideo.style.filter = 'none';
+          remoteVideo.style.transform = '';
+          remoteVideo.style.opacity = '';
           return;
         }
 
-        updateSharpenKernel();
-        remoteVideo.style.filter = 'url(#warudoSharpen) contrast(' + Number(contrastRange.value).toFixed(2) + ') saturate(' + Number(saturationRange.value).toFixed(2) + ')';
+        var filters = [];
+
+        if (sharpness > 0) {
+          updateSharpenKernel();
+          filters.push('url(#warudoSharpen)');
+        }
+
+        if (gamma !== 1) {
+          updateGammaExponent();
+          filters.push('url(#warudoGamma)');
+        }
+
+        if (temp !== 0) {
+          updateTempMatrixValues();
+          filters.push('url(#warudoTemp)');
+        }
+
+        if (brightness !== 1) {
+          filters.push('brightness(' + brightness.toFixed(2) + ')');
+        }
+
+        if (contrast !== 1) {
+          filters.push('contrast(' + contrast.toFixed(2) + ')');
+        }
+
+        if (saturation !== 1) {
+          filters.push('saturate(' + saturation.toFixed(2) + ')');
+        }
+
+        if (hue !== 0) {
+          filters.push('hue-rotate(' + hue + 'deg)');
+        }
+
+        if (denoise > 0) {
+          filters.push('blur(' + denoise.toFixed(1) + 'px)');
+        }
+
+        if (opacity !== 1) {
+          filters.push('opacity(' + opacity.toFixed(2) + ')');
+        }
+
+        var transforms = [];
+        if (zoom !== 1) {
+          transforms.push('scale(' + zoom.toFixed(2) + ')');
+        }
+        if (flipEnable.checked) {
+          transforms.push('scaleX(-1)');
+        }
+
+        remoteVideo.style.filter = filters.length ? filters.join(' ') : 'none';
+        remoteVideo.style.transform = transforms.length ? transforms.join(' ') : '';
+        remoteVideo.style.opacity = '';
       }
 
       function toggleEnhancePanel(forceOpen) {
@@ -196,7 +361,20 @@
         toggleEnhancePanel();
       });
 
-      [enhanceEnable, sharpnessRange, contrastRange, saturationRange].forEach(function (el) {
+      [
+        enhanceEnable,
+        sharpnessRange,
+        contrastRange,
+        saturationRange,
+        brightnessRange,
+        gammaRange,
+        tempRange,
+        hueRange,
+        denoiseRange,
+        flipEnable,
+        zoomRange,
+        opacityRange
+      ].forEach(function (el) {
         el.addEventListener('input', applyEnhancement);
       });
 
@@ -205,6 +383,14 @@
         sharpnessRange.value = '30';
         contrastRange.value = '1.05';
         saturationRange.value = '1.10';
+        brightnessRange.value = '1.00';
+        gammaRange.value = '1.00';
+        tempRange.value = '0';
+        hueRange.value = '0';
+        denoiseRange.value = '0';
+        flipEnable.checked = false;
+        zoomRange.value = '1.00';
+        opacityRange.value = '1.00';
         applyEnhancement();
       });
 

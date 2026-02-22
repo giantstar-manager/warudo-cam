@@ -237,10 +237,20 @@ body.view-connected.stats-force-visible .stats-panel.stats-visible {
 
 .enhance-row {
   display: grid;
-  grid-template-columns: 56px 1fr 44px;
+  grid-template-columns: 72px 1fr 48px;
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
+}
+
+.enhance-section {
+  margin: 10px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #21262d;
+  font-size: 0.65rem;
+  color: #6e7681;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .enhance-row label {
@@ -250,6 +260,16 @@ body.view-connected.stats-force-visible .stats-panel.stats-visible {
 
 .enhance-row-toggle {
   grid-template-columns: 1fr auto;
+}
+
+.enhance-row-check {
+  grid-template-columns: 1fr auto;
+}
+
+.enhance-row-check input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: #58a6ff;
 }
 
 .enhance-value {
