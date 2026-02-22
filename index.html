@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Warudo Cam — 영상 보내기</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <h1>🎥 Warudo Cam</h1>
+    <p class="text-muted">Warudo 아바타 영상을 상대방 OBS로 전송합니다</p>
+
+    <!-- Step 1: Camera Selection -->
+    <div class="mb-16">
+      <label for="cameraSelect">카메라 선택</label>
+      <select id="cameraSelect" class="mt-8"></select>
+    </div>
+
+    <video id="preview" class="push-preview mt-8 mb-16" autoplay muted playsinline></video>
+
+    <!-- Step 2: Generate Offer Code -->
+    <button id="createOffer" class="btn btn-primary mb-16">연결 코드 생성</button>
+
+    <div id="offerSection" class="mb-16" style="display:none">
+      <label for="offerCode">연결 코드 (상대방에게 전달하세요)</label>
+      <textarea id="offerCode" class="mt-8" rows="4" readonly></textarea>
+      <button id="copyOffer" class="btn btn-success mt-8">복사</button>
+    </div>
+
+    <!-- Step 3: Paste Answer Code -->
+    <div id="answerSection" class="mb-16" style="display:none">
+      <label for="answerInput">상대방 응답 코드 붙여넣기</label>
+      <textarea id="answerInput" class="mt-8" rows="4" placeholder="상대방이 보낸 응답 코드를 여기에 붙여넣으세요"></textarea>
+      <button id="applyAnswer" class="btn btn-primary mt-8">연결</button>
+    </div>
+
+    <!-- Status display -->
+    <div id="status" class="status-indicator status-waiting mt-16">대기 중</div>
+  </div>
+
+  <script src="lz-string.min.js"></script>
+  <script src="rtc.js"></script>
+  <script>
+    (function () {
+      var cameraSelect = document.getElementById('cameraSelect');
+      var preview = document.getElementById('preview');
+      var createOfferBtn = document.getElementById('createOffer');
+      var offerSection = document.getElementById('offerSection');
+      var offerCode = document.getElementById('offerCode');
+      var copyOfferBtn = document.getElementById('copyOffer');
+      var answerSection = document.getElementById('answerSection');
+      var answerInput = document.getElementById('answerInput');
+      var applyAnswerBtn = document.getElementById('applyAnswer');
+      var statusEl = document.getElementById('status');
+
+      var currentStream = null;
+
+      // --- Camera listing & preview ---
+
+      function populateCameras() {
+        RTC.listCameras().then(function (cameras) {
+          cameraSelect.innerHTML = '';
+
+          if (!cameras || cameras.length === 0) {
+            var opt = document.createElement('option');
+            opt.textContent = '카메라를 찾을 수 없습니다';
+            opt.disabled = true;
+            cameraSelect.appendChild(opt);
+            return;
+          }
+
+          cameras.forEach(function (cam, i) {
+            var opt = document.createElement('option');
+            opt.value = cam.deviceId;
+            opt.textContent = cam.label || '카메라 ' + (i + 1);
+            cameraSelect.appendChild(opt);
+          });
+
+          startPreview(cameras[0].deviceId);
+        }).catch(function (err) {
+          alert('카메라 권한이 필요합니다');
+        });
+      }
+
+      function startPreview(deviceId) {
+        if (currentStream) {
+          currentStream.getTracks().forEach(function (t) { t.stop(); });
+        }
+
+        RTC.getCamera(deviceId).then(function (stream) {
+          currentStream = stream;
+          preview.srcObject = stream;
+        }).catch(function (err) {
+          alert('카메라 권한이 필요합니다');
+        });
+      }
+
+      cameraSelect.addEventListener('change', function () {
+        startPreview(cameraSelect.value);
+      });
+
+      // --- Offer creation ---
+
+      createOfferBtn.addEventListener('click', function () {
+        if (!currentStream) {
+          alert('카메라를 먼저 선택하세요');
+          return;
+        }
+
+        createOfferBtn.disabled = true;
+        createOfferBtn.textContent = '생성 중...';
+
+        RTC.createPeer(true, currentStream);
+
+        RTC.createOffer().then(function (sdp) {
+          var code = LZString.compressToBase64(sdp);
+          offerCode.value = code;
+          offerSection.style.display = '';
+          answerSection.style.display = '';
+          createOfferBtn.disabled = false;
+          createOfferBtn.textContent = '재생성';
+        }).catch(function (err) {
+          alert('연결 코드 생성 실패: ' + err.message);
+          createOfferBtn.disabled = false;
+          createOfferBtn.textContent = '연결 코드 생성';
+        });
+      });
+
+      // --- Copy offer ---
+
+      copyOfferBtn.addEventListener('click', function () {
+        navigator.clipboard.writeText(offerCode.value).then(function () {
+          copyOfferBtn.textContent = '복사됨!';
+          setTimeout(function () { copyOfferBtn.textContent = '복사'; }, 2000);
+        });
+      });
+
+      // --- Apply answer ---
+
+      applyAnswerBtn.addEventListener('click', function () {
+        var answerCode = answerInput.value.trim();
+        if (!answerCode) return;
+
+        var answerSDP = LZString.decompressFromBase64(answerCode);
+        RTC.setRemoteAnswer(answerSDP).catch(function (err) {
+          alert('응답 코드 적용 실패: ' + err.message);
+        });
+      });
+
+      // --- State change ---
+
+      var stateMap = {
+        'new':          { cls: 'status-waiting',      text: '대기 중' },
+        'connecting':   { cls: 'status-connecting',   text: '연결 중...' },
+        'connected':    { cls: 'status-connected',    text: '연결됨 ✓' },
+        'disconnected': { cls: 'status-disconnected', text: '연결 끊김' },
+        'failed':       { cls: 'status-disconnected', text: '연결 실패' },
+        'closed':       { cls: 'status-waiting',      text: '종료됨' }
+      };
+
+      RTC.onStateChange(function (state) {
+        var info = stateMap[state];
+        if (!info) return;
+
+        statusEl.className = 'status-indicator ' + info.cls + ' mt-16';
+        statusEl.textContent = info.text;
+      });
+
+      // --- Init ---
+      populateCameras();
+    })();
+  </script>
+</body>
+</html>

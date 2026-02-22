@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Warudo Cam — 영상 받기</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Setup section (visible before connection) -->
+  <div class="setup">
+    <h1>📺 Warudo Cam — 영상 받기</h1>
+    <p class="text-muted">상대방이 보낸 연결 코드를 붙여넣고 연결하세요</p>
+
+    <label>상대방 연결 코드 붙여넣기</label>
+    <textarea id="offerInput" rows="4" placeholder="상대방이 보낸 연결 코드를 여기에 붙여넣으세요"></textarea>
+    <button id="connect" class="btn btn-primary mt-8">연결</button>
+
+    <div id="answerSection" style="display:none">
+      <label>응답 코드 (상대방에게 전달하세요)</label>
+      <textarea id="answerCode" rows="4" readonly></textarea>
+      <div class="gap-8 mt-8">
+        <button id="copyAnswer" class="btn btn-success">복사</button>
+      </div>
+    </div>
+
+    <div id="status" class="status-indicator status-waiting mt-16">대기 중</div>
+  </div>
+
+  <!-- Video (always present, fills screen when connected) -->
+  <video id="remoteVideo" class="view-video" autoplay playsinline></video>
+
+  <script src="lz-string.min.js"></script>
+  <script src="rtc.js"></script>
+  <script>
+    (function () {
+      var offerInput = document.getElementById('offerInput');
+      var connectBtn = document.getElementById('connect');
+      var answerSection = document.getElementById('answerSection');
+      var answerCodeEl = document.getElementById('answerCode');
+      var copyAnswerBtn = document.getElementById('copyAnswer');
+      var remoteVideo = document.getElementById('remoteVideo');
+      var statusEl = document.getElementById('status');
+
+      // URL parameter support: auto-fill offer code
+      var params = new URLSearchParams(window.location.search);
+      var offerParam = params.get('offer');
+      if (offerParam) {
+        offerInput.value = offerParam;
+      }
+
+      // Remote track handler
+      RTC.onRemoteTrack(function (stream) {
+        remoteVideo.srcObject = stream;
+      });
+
+      // State change handler
+      RTC.onStateChange(function (state) {
+        var map = {
+          'new':          { cls: 'status-waiting',      text: '대기 중' },
+          'connecting':   { cls: 'status-connecting',   text: '연결 중...' },
+          'connected':    { cls: 'status-connected',    text: '연결됨 ✓' },
+          'disconnected': { cls: 'status-disconnected', text: '연결 끊김' },
+          'failed':       { cls: 'status-disconnected', text: '연결 실패' }
+        };
+
+        var info = map[state];
+        if (!info) return;
+
+        statusEl.className = 'status-indicator ' + info.cls + ' mt-16';
+        statusEl.textContent = info.text;
+
+        if (state === 'connected') {
+          document.body.classList.add('view-connected');
+        }
+      });
+
+      // Connect button
+      connectBtn.addEventListener('click', async function () {
+        var code = offerInput.value.trim();
+        if (!code) return;
+
+        var offerSDP = LZString.decompressFromBase64(code);
+        if (!offerSDP) {
+          alert('올바른 연결 코드가 아닙니다');
+          return;
+        }
+
+        try {
+          RTC.createPeer(false);
+          var answerSDP = await RTC.createAnswer(offerSDP);
+          var answerCode = LZString.compressToBase64(answerSDP);
+
+          answerCodeEl.value = answerCode;
+          answerSection.style.display = '';
+          connectBtn.disabled = true;
+        } catch (e) {
+          alert('올바른 연결 코드가 아닙니다');
+        }
+      });
+
+      // Copy answer button
+      copyAnswerBtn.addEventListener('click', function () {
+        navigator.clipboard.writeText(answerCodeEl.value);
+        copyAnswerBtn.textContent = '복사됨!';
+        setTimeout(function () {
+          copyAnswerBtn.textContent = '복사';
+        }, 2000);
+      });
+    })();
+  </script>
+</body>
+</html>

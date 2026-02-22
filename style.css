@@ -1,0 +1,164 @@
+/* Warudo Cam — Dark theme for WebRTC video tool */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0d1117;
+  color: #e6e6e6;
+  line-height: 1.5;
+}
+
+/* ── Push Page ── */
+
+.container {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+h1, h2 { font-weight: 600; margin-bottom: 16px; }
+h1 { font-size: 1.5rem; }
+h2 { font-size: 1.15rem; color: #b0b8c4; }
+
+label {
+  display: block;
+  font-size: 0.85rem;
+  color: #8b949e;
+  margin-bottom: 6px;
+}
+
+/* ── Select ── */
+
+select {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 1rem;
+  font-family: inherit;
+  color: #e6e6e6;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238b949e' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+}
+
+select:focus { border-color: #58a6ff; }
+
+/* ── Video ── */
+
+video.push-preview {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #161b22;
+  border-radius: 10px;
+  margin: 16px 0;
+  object-fit: cover;
+}
+
+video.view-video {
+  width: 100%;
+  height: 100vh;
+  object-fit: contain;
+  background: transparent;
+}
+
+/* ── Buttons ── */
+
+.btn {
+  display: inline-block;
+  padding: 12px 24px;
+  font-size: 1rem;
+  font-family: inherit;
+  font-weight: 500;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #e6e6e6;
+  background: #21262d;
+  transition: filter 0.15s;
+}
+
+.btn:hover { filter: brightness(1.2); }
+.btn:active { filter: brightness(0.9); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
+
+.btn-primary { background: #58a6ff; color: #0d1117; border-color: #58a6ff; }
+.btn-success { background: #2ea043; color: #fff; border-color: #2ea043; }
+.btn-danger  { background: #f85149; color: #fff; border-color: #f85149; }
+
+/* ── Textarea ── */
+
+textarea {
+  width: 100%;
+  padding: 12px 14px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 0.875rem;
+  color: #e6e6e6;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  resize: vertical;
+  outline: none;
+  line-height: 1.6;
+}
+
+textarea:focus { border-color: #58a6ff; }
+
+/* ── Status Indicator ── */
+
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: #8b949e;
+}
+
+.status-indicator::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #8b949e;
+  flex-shrink: 0;
+}
+
+.status-waiting::before       { background: #d29922; }
+.status-connecting::before    { background: #58a6ff; animation: pulse 1.2s ease-in-out infinite; }
+.status-connected::before     { background: #2ea043; }
+.status-disconnected::before  { background: #f85149; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.3; }
+}
+
+/* ── View Page — Connected (OBS Browser Source) ── */
+
+body.view-connected {
+  background: transparent;
+  overflow: hidden;
+}
+
+body.view-connected .setup { display: none; }
+
+/* ── View Page — Setup form ── */
+
+.setup {
+  max-width: 420px;
+  margin: 15vh auto 0;
+  padding: 24px;
+}
+
+/* ── Utility ── */
+
+.mt-8  { margin-top: 8px; }
+.mt-16 { margin-top: 16px; }
+.mb-16 { margin-bottom: 16px; }
+.gap-8 { display: flex; gap: 8px; }
+.text-muted { color: #8b949e; font-size: 0.8rem; }
