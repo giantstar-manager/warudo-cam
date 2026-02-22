@@ -348,7 +348,6 @@
         var isOpen = typeof forceOpen === 'boolean' ? forceOpen : !enhancePanel.classList.contains('open');
         enhancePanel.classList.toggle('open', isOpen);
         enhanceToggle.setAttribute('aria-expanded', String(isOpen));
-        enhanceContent.hidden = !isOpen;
       }
 
       RTC.configure({ codec: codecSelect.value });

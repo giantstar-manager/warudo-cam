@@ -8,7 +8,17 @@
   var DEFAULT_BITRATE = 12000000;
   var MIN_BITRATE = 8000000;
   var DEFAULT_CODEC = 'vp9';
+  var DEFAULT_RESOLUTION = 'max';
+  var DEFAULT_FRAMERATE = 60;
   var DEFAULT_STATS_INTERVAL_MS = 2000;
+
+  var RESOLUTION_PRESETS = {
+    'max':   { width: { ideal: 4096 }, height: { ideal: 2160 } },
+    '4k':    { width: { ideal: 3840 }, height: { ideal: 2160 } },
+    '1440p': { width: { ideal: 2560 }, height: { ideal: 1440 } },
+    '1080p': { width: { ideal: 1920 }, height: { ideal: 1080 } },
+    '720p':  { width: { ideal: 1280 }, height: { ideal: 720 } }
+  };
   var ICE_SERVERS = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
@@ -26,7 +36,9 @@
   var lastRemoteDescription = null;
   var rtcConfig = {
     codec: DEFAULT_CODEC,
-    bitrate: DEFAULT_BITRATE
+    bitrate: DEFAULT_BITRATE,
+    resolution: DEFAULT_RESOLUTION,
+    frameRate: DEFAULT_FRAMERATE
   };
   var stateCallbacks = [];
   var remoteTrackCallbacks = [];
@@ -206,6 +218,9 @@
           params.encodings[e].maxBitrate = maxBitrate;
           params.encodings[e].minBitrate = minBitrate;
           params.encodings[e].degradationPreference = 'maintain-resolution';
+          if (rtcConfig.frameRate && rtcConfig.frameRate > 0) {
+            params.encodings[e].maxFramerate = rtcConfig.frameRate;
+          }
         }
 
         params.degradationPreference = 'maintain-resolution';
@@ -417,18 +432,27 @@
     return stream;
   }
 
+  function getResolutionConstraints() {
+    var preset = RESOLUTION_PRESETS[rtcConfig.resolution];
+    if (!preset) preset = RESOLUTION_PRESETS['max'];
+    return { width: preset.width, height: preset.height };
+  }
+
   async function getCamera(deviceId) {
-    var exactConstraints = {
+    var res = getResolutionConstraints();
+    var fr = rtcConfig.frameRate || DEFAULT_FRAMERATE;
+
+    var primaryConstraints = {
       video: {
         deviceId: deviceId ? { exact: deviceId } : undefined,
-        width: { exact: 1920 },
-        height: { exact: 1080 },
-        frameRate: { exact: 30 }
+        width: res.width,
+        height: res.height,
+        frameRate: { ideal: fr }
       },
       audio: false
     };
 
-    var idealConstraints = {
+    var fallbackConstraints = {
       video: {
         deviceId: deviceId ? { exact: deviceId } : undefined,
         width: { ideal: 1920 },
@@ -439,10 +463,45 @@
     };
 
     try {
-      return await getCameraWithConstraints(exactConstraints);
+      return await getCameraWithConstraints(primaryConstraints);
     } catch (_ignore) {
-      return getCameraWithConstraints(idealConstraints);
+      return getCameraWithConstraints(fallbackConstraints);
     }
+  }
+
+  async function reacquireCamera(deviceId) {
+    var newStream = await getCamera(deviceId);
+    if (localStream) {
+      var oldTracks = localStream.getTracks();
+      for (var t = 0; t < oldTracks.length; t += 1) oldTracks[t].stop();
+    }
+    localStream = newStream;
+    applyTrackHints(localStream);
+    return newStream;
+  }
+
+  async function replaceLocalStream(newStream) {
+    if (localStream && localStream !== newStream) {
+      var oldTracks = localStream.getTracks();
+      for (var t = 0; t < oldTracks.length; t += 1) oldTracks[t].stop();
+    }
+    localStream = newStream;
+    applyTrackHints(localStream);
+
+    if (peer) {
+      var newTracks = newStream.getVideoTracks();
+      if (newTracks.length > 0) {
+        var senders = peer.getSenders();
+        for (var s = 0; s < senders.length; s += 1) {
+          if (senders[s].track && senders[s].track.kind === 'video') {
+            await senders[s].replaceTrack(newTracks[0]);
+          }
+        }
+      }
+      await applySenderParameters(peer);
+    }
+
+    return newStream;
   }
 
   function createPeer(isCaller, stream) {
@@ -501,6 +560,7 @@
 
   function configure(options) {
     var next = options || {};
+    var needReconstraint = false;
 
     if (typeof next.codec !== 'undefined') {
       var codecValue = String(next.codec || '').toLowerCase();
@@ -519,6 +579,41 @@
       rtcConfig.bitrate = Math.round(bitrateValue);
     }
 
+    if (typeof next.resolution !== 'undefined') {
+      var resValue = String(next.resolution || '').toLowerCase();
+      if (!RESOLUTION_PRESETS[resValue]) {
+        throw new Error('resolution must be one of: max, 4k, 1440p, 1080p, 720p.');
+      }
+      if (rtcConfig.resolution !== resValue) {
+        rtcConfig.resolution = resValue;
+        needReconstraint = true;
+      }
+    }
+
+    if (typeof next.frameRate !== 'undefined') {
+      var frValue = Number(next.frameRate);
+      if (!isFinite(frValue) || frValue <= 0) {
+        throw new Error('frameRate must be a positive number.');
+      }
+      if (rtcConfig.frameRate !== frValue) {
+        rtcConfig.frameRate = frValue;
+        needReconstraint = true;
+      }
+    }
+
+    if (needReconstraint && localStream) {
+      var videoTracks = localStream.getVideoTracks();
+      if (videoTracks.length > 0) {
+        var res = getResolutionConstraints();
+        var constraintUpdate = {
+          width: res.width,
+          height: res.height,
+          frameRate: { ideal: rtcConfig.frameRate }
+        };
+        videoTracks[0].applyConstraints(constraintUpdate).catch(function (_ignore) {});
+      }
+    }
+
     if (peer) {
       applyMediaTuning(peer);
     }
@@ -529,7 +624,9 @@
   function getConfig() {
     return {
       codec: rtcConfig.codec,
-      bitrate: rtcConfig.bitrate
+      bitrate: rtcConfig.bitrate,
+      resolution: rtcConfig.resolution,
+      frameRate: rtcConfig.frameRate
     };
   }
 
@@ -750,6 +847,8 @@
     getConfig: getConfig,
     listCameras: listCameras,
     getCamera: getCamera,
+    reacquireCamera: reacquireCamera,
+    replaceLocalStream: replaceLocalStream,
     createPeer: createPeer,
     createOffer: createOffer,
     createAnswer: createAnswer,

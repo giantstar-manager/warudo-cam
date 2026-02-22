@@ -149,7 +149,10 @@ body.view-connected .setup { display: none; }
 
 body.view-connected .stats-panel { display: none; }
 
-body.view-connected .enhance-panel { display: none; }
+body.view-connected .enhance-panel { transition: opacity 0.2s; }
+body.view-connected .enhance-gear { opacity: 0.3; transition: opacity 0.2s; }
+body.view-connected .enhance-gear:hover,
+body.view-connected .enhance-panel.open .enhance-gear { opacity: 1; }
 
 body.view-connected.stats-force-visible .stats-panel.stats-visible {
   display: grid;
@@ -227,7 +230,10 @@ body.view-connected.stats-force-visible .stats-panel.stats-visible {
   font-size: 1rem;
 }
 
+.enhance-panel.open .enhance-content { display: block; }
+
 .enhance-content {
+  display: none;
   margin-top: 8px;
   padding: 12px;
   border-radius: 10px;
@@ -294,6 +300,60 @@ body.view-connected.stats-force-visible .stats-panel.stats-visible {
   position: absolute;
   width: 0;
   height: 0;
+}
+
+/* ── Settings Panel (Push Page) ── */
+
+.settings-panel {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.settings-header {
+  font-size: 0.85rem;
+  color: #8b949e;
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #21262d;
+  letter-spacing: 0.03em;
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.settings-row:last-child { margin-bottom: 0; }
+
+.settings-row label {
+  margin-bottom: 0;
+  font-size: 0.8rem;
+}
+
+.settings-row select {
+  padding: 8px 10px;
+  font-size: 0.875rem;
+}
+
+.settings-row-slider {
+  grid-template-columns: 80px 1fr 70px;
+}
+
+.settings-row input[type='range'] {
+  width: 100%;
+  accent-color: #58a6ff;
+}
+
+.settings-value {
+  text-align: right;
+  font-size: 0.8rem;
+  color: #8b949e;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
 }
 
 /* ── Utility ── */

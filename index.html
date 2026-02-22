@@ -18,12 +18,42 @@
       <select id="cameraSelect" class="mt-8"></select>
     </div>
 
-    <div class="mb-16">
-      <label for="codecSelect">코덱 선택</label>
-      <select id="codecSelect" class="mt-8">
-        <option value="vp9" selected>VP9 (권장)</option>
-        <option value="h264">H.264</option>
-      </select>
+    <!-- 송신 설정 -->
+    <div class="settings-panel mb-16">
+      <div class="settings-header">송신 설정</div>
+
+      <div class="settings-row">
+        <label for="resolutionSelect">해상도</label>
+        <select id="resolutionSelect">
+          <option value="max" selected>최대 (카메라 최고 해상도)</option>
+          <option value="4k">4K (3840×2160)</option>
+          <option value="1440p">1440p (2560×1440)</option>
+          <option value="1080p">1080p (1920×1080)</option>
+          <option value="720p">720p (1280×720)</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <label for="fpsSelect">프레임</label>
+        <select id="fpsSelect">
+          <option value="60" selected>60 fps</option>
+          <option value="30">30 fps</option>
+        </select>
+      </div>
+
+      <div class="settings-row settings-row-slider">
+        <label for="bitrateSlider">비트레이트</label>
+        <input type="range" id="bitrateSlider" min="4" max="30" value="12" step="1">
+        <span id="bitrateValue" class="settings-value">12 Mbps</span>
+      </div>
+
+      <div class="settings-row">
+        <label for="codecSelect">코덱</label>
+        <select id="codecSelect">
+          <option value="vp9" selected>VP9 (권장)</option>
+          <option value="h264">H.264</option>
+        </select>
+      </div>
     </div>
 
     <video id="preview" class="push-preview mt-8 mb-16" autoplay muted playsinline></video>
@@ -62,6 +92,10 @@
     (function () {
       var cameraSelect = document.getElementById('cameraSelect');
       var codecSelect = document.getElementById('codecSelect');
+      var resolutionSelect = document.getElementById('resolutionSelect');
+      var fpsSelect = document.getElementById('fpsSelect');
+      var bitrateSlider = document.getElementById('bitrateSlider');
+      var bitrateValueEl = document.getElementById('bitrateValue');
       var preview = document.getElementById('preview');
       var createOfferBtn = document.getElementById('createOffer');
       var offerSection = document.getElementById('offerSection');
@@ -187,7 +221,39 @@
         RTC.configure({ codec: codecSelect.value });
       });
 
-      RTC.configure({ codec: codecSelect.value });
+      function reacquireAndReplace() {
+        var deviceId = cameraSelect.value;
+        if (!currentStream) return;
+
+        RTC.reacquireCamera(deviceId).then(function (newStream) {
+          currentStream = newStream;
+          preview.srcObject = newStream;
+          return RTC.replaceLocalStream(newStream);
+        }).catch(function (_err) {});
+      }
+
+      resolutionSelect.addEventListener('change', function () {
+        RTC.configure({ resolution: resolutionSelect.value });
+        reacquireAndReplace();
+      });
+
+      fpsSelect.addEventListener('change', function () {
+        RTC.configure({ frameRate: parseInt(fpsSelect.value, 10) });
+        reacquireAndReplace();
+      });
+
+      bitrateSlider.addEventListener('input', function () {
+        var mbps = parseInt(bitrateSlider.value, 10);
+        bitrateValueEl.textContent = mbps + ' Mbps';
+        RTC.configure({ bitrate: mbps * 1000000 });
+      });
+
+      RTC.configure({
+        codec: codecSelect.value,
+        resolution: resolutionSelect.value,
+        frameRate: parseInt(fpsSelect.value, 10),
+        bitrate: parseInt(bitrateSlider.value, 10) * 1000000
+      });
 
       // --- Offer creation ---
 
